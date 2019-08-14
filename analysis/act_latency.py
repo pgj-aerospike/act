@@ -22,12 +22,17 @@
 #
 
 from __future__ import print_function
-from openpyxl.styles import NamedStyle, Font, Border, Side, colors, Color
-from openpyxl import Workbook
-
 import getopt
 import re
 import sys
+
+try:
+    from openpyxl.styles import NamedStyle, Font, Border, Side, colors, Color
+    from openpyxl import Workbook
+    have_openpyxl = True
+except:
+    have_openpyxl = False
+    
 
 # ==========================================================
 # Compatibility.
@@ -187,6 +192,9 @@ def get_args():
         print("every_nth must be more than 0")
         sys.exit(-1)
 
+    if Args.excel is not None and not have_openpyxl:
+        print("openpyxl is not available... use 'pip install openpyxl'")
+        sys.exit(-1)
 
 # ------------------------------------------------
 # Print usage.
