@@ -71,10 +71,11 @@ class Hist(object):
     bucket_range = None
     display_range = None
     slice_time = 0
-    cur_row = None # a little sleazy but convenient
-    first_row = 20
-    end_row = None
+    first_row = 20 # putting these here is a little sleazy but convenient
     first_col = 2
+    cur_row = None
+    last_row = None
+
 
     def __init__(self, name):
         self.name = name
@@ -124,17 +125,22 @@ def main():
         fr = hists[0].first_row
         lr = hists[0].last_row
         fc = hists[0].first_col
+
+        # box around Slice label column
         thicken(wb.active,  fr + 2,  fc,     fr + 2,  fc)
         thicken(wb.active,  fr + 3,  fc,     lr,      fc)
         thicken(wb.active,  lr + 1,  fc,     lr + 2,  fc)
 
-        thicken(wb.active,  fr + 2,  fc + 1, fr + 2,  fc + 8)
-        thicken(wb.active,  fr + 3,  fc + 1, lr,      fc + 8)
-        thicken(wb.active,  lr + 1,  fc + 1, lr + 2,  fc + 8)
+        for hist in hists:
+            # label box
+            lc = fc + len(Hist.display_range) + Args.extra
+            thicken(wb.active,  fr + 2,  fc + 1, fr + 2,  lc)
+            # slices box
+            thicken(wb.active,  fr + 3,  fc + 1, lr,      lc)
+            # aggregate box
+            thicken(wb.active,  lr + 1,  fc + 1, lr + 2,  lc)
+            fc = lc + 1
         
-        thicken(wb.active,  fr + 2, fc + 10,  fr + 2, fc + 17)
-        thicken(wb.active,  fr + 3, fc + 10,  lr,     fc + 17)
-        thicken(wb.active,  lr + 1, fc + 10,  lr + 2, fc + 17)
         wb.save(Args.excel)
     else:
         print_latency_aggregates(hists, num_slices)
@@ -484,7 +490,7 @@ def excel_table_header(hists, book):
     hists[0].cur_row += 2
 
     fc = hists[0].first_col
-    set_cell(sheet.cell(hists[0].cur_row, fc), "Slice", True);
+    set_cell(sheet.cell(hists[0].cur_row, fc), "Slice", True, True);
     
     for i in range(0, len(hists)):
         for j in range(0, len(thresh)):
