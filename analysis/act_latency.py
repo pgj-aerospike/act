@@ -22,6 +22,8 @@
 #
 
 from __future__ import print_function
+from openpyxl.styles import NamedStyle, Font, Border, Side, colors, Color
+from openpyxl import Workbook
 
 import getopt
 import re
@@ -49,6 +51,7 @@ GAP = "  "
 
 class Args(object):
     log = None
+    excel = None
     histograms = []
     slice = 3600
     start_bucket = 0
@@ -64,6 +67,8 @@ class Hist(object):
     bucket_range = None
     display_range = None
     slice_time = 0
+    cur_row = None # a little sleazy but convenient
+    start_row = 0
 
     def __init__(self, name):
         self.name = name
@@ -91,9 +96,33 @@ def main():
     find_max_bucket()
     hists = [Hist(name) for name in Args.histograms]
 
-    print_table_header(hists)
-    num_slices = print_latency_slices(hists, file_id)
-    print_latency_aggregates(hists, num_slices)
+    if Args.excel is not None:
+        if not Args.excel.endswith('.xlsx'):
+            Args.excel += '.xlsx'
+        wb = Workbook() #(write_only = True)
+        excel_table_header(hists, wb)
+    else:
+        wb = None
+        print_table_header(hists)
+
+    num_slices = output_latency_slices(hists, file_id, wb)
+    if Args.excel is not None:
+        excel_latency_aggregates(hists, num_slices, wb)
+
+        thicken(wb.active,  3,  1,  3,  1)
+        thicken(wb.active,  4,  1, 27,  1)
+        thicken(wb.active, 28,  1, 29,  1)
+
+        thicken(wb.active,  3,  2,  3,  9)
+        thicken(wb.active,  4,  2, 27,  9)
+        thicken(wb.active, 28,  2, 29,  9)
+        
+        thicken(wb.active,  3, 11,  3, 18)
+        thicken(wb.active,  4, 11, 27, 18)
+        thicken(wb.active, 28, 11, 29, 18)
+        wb.save(Args.excel)
+    else:
+        print_latency_aggregates(hists, num_slices)
 
 
 # ==========================================================
@@ -110,7 +139,7 @@ def get_args():
     # Read the input arguments:
     try:
         opts, args = getopt.getopt(
-            sys.argv[1:], "l:h:t:s:n:e:x",
+            sys.argv[1:], "l:h:t:s:n:e:c:x",
             ["log=", "histogram=", "slice=", "start_bucket=", "num_buckets=",
              "every_nth=", "extra"])
     except getopt.GetoptError as err:
@@ -132,6 +161,8 @@ def get_args():
             Args.num_buckets = int(a)
         elif o == "-e" or o == "--every_nth":
             Args.every_nth = int(a)
+        elif o == "-c" or o == "--excel":
+            Args.excel = a
         elif o == "-x" or o == "--extra":
             Args.extra = True
 
@@ -175,6 +206,8 @@ def print_usage():
     print("    default: 7")
     print(" -e show start bucket then every n-th bucket")
     print("    default: 1")
+    print(" -o output Excel Spreadsheet")
+    print("    NO DEFAULT")
     print(" -x (show extra information for each slice)")
     print("    default: not set")
 
@@ -371,11 +404,79 @@ def print_table_header(hists):
     print(labels_out)
     print(Hist.underline)
 
+def set_cell(c, v, bld=False, ralign=False):
+    c.font = c.font.copy(size=12)
+
+    if (bld):
+        c.font = c.font.copy(bold=True)
+
+    if (ralign):
+        c.alignment = c.alignment.copy(horizontal = "right")
+
+    c.value = v
+
+def set_num(c, v, f, bld=False):
+    c.number_format = f
+
+    if (bld):
+        c.font = c.font.copy(bold=True)
+
+    c.value = v
+
+def thicken(sheet, ul_row, ul_col, lr_row, lr_col):
+    for i in range(ul_col, lr_col + 1):
+        c = sheet.cell(ul_row, i)
+        c.border = c.border.copy(top=Side(style='medium'))
+
+    for i in range(ul_row, lr_row + 1):
+        c = sheet.cell(i, ul_col)
+        c.border = c.border.copy(left=Side(style='medium'))
+        
+    for i in range(ul_col, lr_col + 1):
+        c = sheet.cell(lr_row, i)
+        c.border = c.border.copy(bottom=Side(style='medium'))
+
+    for i in range(ul_row, lr_row + 1):
+        c = sheet.cell(i, lr_col)
+        c.border = c.border.copy(right=Side(style='medium'))
+        
+
+# ------------------------------------------------
+# Print table header to spreadsheet
+#
+def excel_table_header(hists, book):
+    slice_col = 1
+    thresh_start_col = slice_col + 1
+    thresh = []
+    hists[0].cur_row = 1
+    hist_len = Args.num_buckets + Args.extra + 1 # pad one column
+    sheet = book.active
+
+    for i in Hist.display_range:
+        thresh.append(str(pow(2, i)))
+
+    for i in range(0, len(hists)):        
+        set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i), hists[i].name, True)
+        set_cell(sheet.cell(hists[0].cur_row+1, 2 + hist_len * i), Hist.scale_label, True)
+
+    hists[0].cur_row += 2
+
+    set_cell(sheet.cell(hists[0].cur_row, 1), "Slice", True);
+    
+    for i in range(0, len(hists)):
+        for j in range(0, len(thresh)):
+            set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i + j), thresh[j], True, True)
+        if (Args.extra):
+            set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i + len(thresh)), "Rate",
+                     True, True)
+
+    hists[0].cur_row += 1
+    hists[0].start_row = hists[0].cur_row
 
 # ------------------------------------------------
 # Generate latency lines.
 #
-def print_latency_slices(hists, file_id):
+def output_latency_slices(hists, file_id, book):
     # Initialization before processing time slices:
     which_slice = 0
     after_time = Hist.slice_time
@@ -388,7 +489,10 @@ def print_latency_slices(hists, file_id):
 
         # Print this slice's percentages over thresholds:
         which_slice += 1
-        print_slice_line(which_slice, hists)
+        if (Args.excel is not None):
+            excel_slice_line(which_slice, hists, book)
+        else:
+            print_slice_line(which_slice, hists)
 
         # Prepare for next slice:
         after_time += Hist.slice_time
@@ -416,6 +520,57 @@ def print_latency_aggregates(hists, num_slices):
     print_max_line(hists)
 
 
+# ------------------------------------------------
+# Generate latency aggregate lines.
+#
+def excel_latency_aggregates(hists, num_slices, book):
+    sheet = book.active
+    cur_col = 1
+    
+    # print averages
+    set_cell(sheet.cell(hists[0].cur_row, cur_col), "Avg", True)
+
+    for hist in hists:
+        for i in Hist.display_range:
+            cur_col += 1
+            col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
+            fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
+                                         hists[0].start_row, hists[0].cur_row-1)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
+
+        if (Args.extra):
+            cur_col += 1
+            col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
+            fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
+                                         hists[0].start_row, hists[0].cur_row-1)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
+
+        cur_col += 1
+
+    hists[0].cur_row += 1
+
+    # print max
+    cur_col = 1
+    set_cell(sheet.cell(hists[0].cur_row, cur_col), "Max", True)
+
+    for hist in hists:
+        for i in Hist.display_range:
+            cur_col += 1
+            col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
+            fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
+                                         hists[0].start_row, hists[0].cur_row-1)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
+
+        if (Args.extra):
+            cur_col += 1
+            col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
+            fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
+                                         hists[0].start_row, hists[0].cur_row-1)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
+
+        cur_col += 1
+
+            
 # ------------------------------------------------
 # Get the data chunk reported by act at the specified after_time.
 #
@@ -462,6 +617,29 @@ def print_slice_line(slice_tag, hists):
             output += "%11.1f" % (hist.rate)
 
     print(output)
+
+
+# ------------------------------------------------
+# Print a latency data output line.
+#
+def excel_slice_line(slice_tag, hists, book):
+    sheet = book.active
+    cur_col = 1
+    set_num(sheet.cell(hists[0].cur_row, cur_col), slice_tag, "00", True)
+
+    for hist in hists:
+        for i in Hist.display_range:
+            cur_col += 1
+            set_num(sheet.cell(hists[0].cur_row, cur_col), hist.overs[i], "0.00")
+
+        if (Args.extra):
+            cur_col += 1
+            set_num(sheet.cell(hists[0].cur_row, cur_col), hist.rate, "0.0")
+
+        cur_col += 1
+
+    hists[0].cur_row += 1
+
 
 
 # ------------------------------------------------
