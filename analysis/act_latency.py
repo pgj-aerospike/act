@@ -104,7 +104,13 @@ def main():
     if Args.excel is not None:
         if not Args.excel.endswith('.xlsx'):
             Args.excel += '.xlsx'
-        wb = Workbook() #(write_only = True)
+        try:
+            wb = Workbook() #(write_only = True)
+            wb.save(Args.excel)
+        except:
+            print("can't save " + Args.excel + ": check permissions")
+            print_usage()
+            sys.exit(-1)
         excel_table_header(hists, wb)
     else:
         wb = None
@@ -424,6 +430,8 @@ def set_cell(c, v, bld=False, ralign=False):
     c.value = v
 
 def set_num(c, v, f, bld=False):
+    c.font = c.font.copy(size=12)
+
     c.number_format = f
 
     if (bld):
