@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 # ------------------------------------------------
 # act_latency.py
 #
@@ -73,7 +72,9 @@ class Hist(object):
     display_range = None
     slice_time = 0
     cur_row = None # a little sleazy but convenient
-    start_row = 0
+    first_row = 20
+    end_row = None
+    first_col = 2
 
     def __init__(self, name):
         self.name = name
@@ -120,17 +121,20 @@ def main():
     if Args.excel is not None:
         excel_latency_aggregates(hists, num_slices, wb)
 
-        thicken(wb.active,  3,  1,  3,  1)
-        thicken(wb.active,  4,  1, 27,  1)
-        thicken(wb.active, 28,  1, 29,  1)
+        fr = hists[0].first_row
+        lr = hists[0].last_row
+        fc = hists[0].first_col
+        thicken(wb.active,  fr + 2,  fc,     fr + 2,  fc)
+        thicken(wb.active,  fr + 3,  fc,     lr,      fc)
+        thicken(wb.active,  lr + 1,  fc,     lr + 2,  fc)
 
-        thicken(wb.active,  3,  2,  3,  9)
-        thicken(wb.active,  4,  2, 27,  9)
-        thicken(wb.active, 28,  2, 29,  9)
+        thicken(wb.active,  fr + 2,  fc + 1, fr + 2,  fc + 8)
+        thicken(wb.active,  fr + 3,  fc + 1, lr,      fc + 8)
+        thicken(wb.active,  lr + 1,  fc + 1, lr + 2,  fc + 8)
         
-        thicken(wb.active,  3, 11,  3, 18)
-        thicken(wb.active,  4, 11, 27, 18)
-        thicken(wb.active, 28, 11, 29, 18)
+        thicken(wb.active,  fr + 2, fc + 10,  fr + 2, fc + 17)
+        thicken(wb.active,  fr + 3, fc + 10,  lr,     fc + 17)
+        thicken(wb.active,  lr + 1, fc + 10,  lr + 2, fc + 17)
         wb.save(Args.excel)
     else:
         print_latency_aggregates(hists, num_slices)
@@ -464,30 +468,32 @@ def excel_table_header(hists, book):
     slice_col = 1
     thresh_start_col = slice_col + 1
     thresh = []
-    hists[0].cur_row = 1
+    hists[0].cur_row = hists[0].first_row
     hist_len = Args.num_buckets + Args.extra + 1 # pad one column
     sheet = book.active
 
     for i in Hist.display_range:
         thresh.append(str(pow(2, i)))
 
+    fc = hists[0].first_col
+
     for i in range(0, len(hists)):        
-        set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i), hists[i].name, True)
-        set_cell(sheet.cell(hists[0].cur_row+1, 2 + hist_len * i), Hist.scale_label, True)
+        set_cell(sheet.cell(hists[0].cur_row, fc + 1 + hist_len * i), hists[i].name, True)
+        set_cell(sheet.cell(hists[0].cur_row+1, fc + 1 + hist_len * i), Hist.scale_label, True)
 
     hists[0].cur_row += 2
 
-    set_cell(sheet.cell(hists[0].cur_row, 1), "Slice", True);
+    fc = hists[0].first_col
+    set_cell(sheet.cell(hists[0].cur_row, fc), "Slice", True);
     
     for i in range(0, len(hists)):
         for j in range(0, len(thresh)):
-            set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i + j), thresh[j], True, True)
+            set_cell(sheet.cell(hists[0].cur_row, fc + 1 + hist_len * i + j), thresh[j], True, True)
         if (Args.extra):
-            set_cell(sheet.cell(hists[0].cur_row, 2 + hist_len * i + len(thresh)), "Rate",
+            set_cell(sheet.cell(hists[0].cur_row, fc + 1 + hist_len * i + len(thresh)), "Rate",
                      True, True)
 
     hists[0].cur_row += 1
-    hists[0].start_row = hists[0].cur_row
 
 # ------------------------------------------------
 # Generate latency lines.
@@ -541,24 +547,25 @@ def print_latency_aggregates(hists, num_slices):
 #
 def excel_latency_aggregates(hists, num_slices, book):
     sheet = book.active
-    cur_col = 1
+    cur_col = hists[0].first_col
     
     # print averages
     set_cell(sheet.cell(hists[0].cur_row, cur_col), "Avg", True)
+    hists[0].last_row = hists[0].cur_row - 1
 
     for hist in hists:
         for i in Hist.display_range:
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].start_row, hists[0].cur_row-1)
+                                         hists[0].first_row, hists[0].last_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
 
         if (Args.extra):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].start_row, hists[0].cur_row-1)
+                                                   hists[0].first_row, hists[0].last_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
 
         cur_col += 1
@@ -566,7 +573,7 @@ def excel_latency_aggregates(hists, num_slices, book):
     hists[0].cur_row += 1
 
     # print max
-    cur_col = 1
+    cur_col = hists[0].first_col
     set_cell(sheet.cell(hists[0].cur_row, cur_col), "Max", True)
 
     for hist in hists:
@@ -574,14 +581,14 @@ def excel_latency_aggregates(hists, num_slices, book):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].start_row, hists[0].cur_row-1)
+                                         hists[0].first_row, hists[0].last_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
 
         if (Args.extra):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].start_row, hists[0].cur_row-1)
+                                         hists[0].first_row, hists[0].last_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
 
         cur_col += 1
@@ -640,7 +647,7 @@ def print_slice_line(slice_tag, hists):
 #
 def excel_slice_line(slice_tag, hists, book):
     sheet = book.active
-    cur_col = 1
+    cur_col = hists[0].first_col
     set_num(sheet.cell(hists[0].cur_row, cur_col), slice_tag, "00", True)
 
     for hist in hists:
