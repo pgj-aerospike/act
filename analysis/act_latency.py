@@ -419,10 +419,10 @@ def print_table_header(hists):
     print(Hist.underline)
 
 def set_cell(c, v, bld=False, ralign=False):
-    c.font = c.font.copy(size=12)
-
     if (bld):
-        c.font = c.font.copy(bold=True)
+        c.font = c.font.copy(bold=True, size=12)
+    else:
+        c.font = c.font.copy(size=12)
 
     if (ralign):
         c.alignment = c.alignment.copy(horizontal = "right")
@@ -430,12 +430,12 @@ def set_cell(c, v, bld=False, ralign=False):
     c.value = v
 
 def set_num(c, v, f, bld=False):
-    c.font = c.font.copy(size=12)
-
     c.number_format = f
 
     if (bld):
-        c.font = c.font.copy(bold=True)
+        c.font = c.font.copy(bold=True, size=12)
+    else:
+        c.font = c.font.copy(size=12)
 
     c.value = v
 
