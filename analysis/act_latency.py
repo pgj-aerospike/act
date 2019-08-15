@@ -24,6 +24,7 @@ from __future__ import print_function
 import getopt
 import re
 import sys
+from datetime import date
 
 try:
     from openpyxl.styles import NamedStyle, Font, Border, Side, colors, Color
@@ -71,10 +72,10 @@ class Hist(object):
     bucket_range = None
     display_range = None
     slice_time = 0
-    first_row = 20 # putting these here is a little sleazy but convenient
+    first_table_row = None # first row for slice tables
     first_col = 2
     cur_row = None
-    last_row = None
+    last_table_row = None
 
 
     def __init__(self, name):
@@ -115,8 +116,8 @@ def main():
             print("can't save " + Args.excel + ": check permissions")
             print_usage()
             sys.exit(-1)
-        # excel_config(config)
         dump_config(config)
+        hists[0].first_table_row = excel_config(config, wb, 2, hists[0].first_col) + 1
         excel_table_header(hists, wb)
     else:
         wb = None
@@ -127,8 +128,8 @@ def main():
     if Args.excel is not None:
         excel_latency_aggregates(hists, num_slices, wb)
 
-        fr = hists[0].first_row
-        lr = hists[0].last_row
+        fr = hists[0].first_table_row
+        lr = hists[0].last_table_row
         fc = hists[0].first_col
 
         # box around Slice label column
@@ -433,8 +434,95 @@ def print_config(config):
 # ------------------------------------------------
 # Output configuration information to Excel Spreadsheet
 #
-def excep_config(config):
-    return None
+def excel_config(config, book, start_row, start_col):
+    misc = config['misc']
+    sheet = book.active
+
+    set_cell(sheet.cell(start_row, start_col), "Version", True)
+    thicken(sheet, start_row, start_col, start_row, start_col)
+    set_cell(sheet.cell(start_row, start_col + 1), misc['version'], False, True)
+    thicken(sheet, start_row, start_col + 1, start_row, start_col + 1)
+
+    set_cell(sheet.cell(start_row, start_col + 3), "Log File", True)
+    thicken(sheet, start_row, start_col + 3, start_row, start_col + 3)
+    set_cell(sheet.cell(start_row, start_col + 4), misc['log_file'], False, True)
+    thicken(sheet, start_row, start_col + 4, start_row, start_col + 5)
+    merge_cells(sheet, start_row, start_col + 4, start_row, start_col + 5)
+    
+    today = date.today()
+    set_cell(sheet.cell(start_row, start_col + 9), "ACT Report Date", True)
+    thicken(sheet, start_row, start_col + 9, start_row, start_col + 10)
+    merge_cells(sheet, start_row, start_col + 9, start_row, start_col + 10)
+
+    set_cell(sheet.cell(start_row, start_col + 11), today)
+    thicken(sheet, start_row, start_col + 11, start_row, start_col + 12)
+    merge_cells(sheet, start_row, start_col + 11, start_row, start_col + 12)
+    
+    start_row += 2
+
+    save_row = start_row
+    set_cell(sheet.cell(start_row, start_col), "HISTOGRAM NAMES", True, 'center')
+    merge_cells(sheet, start_row, start_col, start_row, start_col + 1)
+    start_row += 1
+    for x in config['histogram_names']:
+        set_cell(sheet.cell(start_row, start_col), x[0])
+        merge_cells(sheet, start_row, start_col, start_row, start_col + 1)
+        start_row += 1
+    thicken(sheet, save_row, start_col, save_row, start_col + 1);
+    thicken(sheet, save_row, start_col, start_row - 1, start_col + 1);
+    max_row = start_row
+
+    start_row = save_row
+    start_col += 3
+    set_cell(sheet.cell(start_row, start_col), "%s CONFIGURATION" % (misc['act_type']), True, 'center')
+    merge_cells(sheet, start_row, start_col, start_row, start_col + 4)
+    start_row += 1
+    for x in config['derived']:
+        set_cell(sheet.cell(start_row, start_col), x[0])
+        merge_cells(sheet, start_row, start_col, start_row, start_col + 2)
+        try:
+            val = int(x[1])
+        except ValueError:
+            try:
+                val = float(x[1])
+            except ValueError:
+                val = x[1]
+        
+        set_cell(sheet.cell(start_row, start_col + 3), val, False, True)
+        merge_cells(sheet, start_row, start_col + 3, start_row, start_col + 4)
+        start_row += 1
+    if start_row > max_row:
+        max_row = start_row
+    thicken(sheet, save_row, start_col, save_row, start_col + 4);
+    thicken(sheet, save_row, start_col, start_row - 1, start_col + 4);
+    thicken(sheet, save_row + 1, start_col, start_row - 1, start_col + 2);
+
+    start_row = save_row
+    start_col += 6
+    set_cell(sheet.cell(start_row, start_col), "DERIVED CONFIGURATION", True, 'center')
+    merge_cells(sheet, start_row, start_col, start_row, start_col + 4)
+    start_row += 1
+    for x in config['act']:
+        set_cell(sheet.cell(start_row, start_col), x[0])
+        merge_cells(sheet, start_row, start_col, start_row, start_col + 2)
+        try:
+            val = int(x[1])
+        except ValueError:
+            try:
+                val = float(x[1])
+            except ValueError:
+                val = x[1]
+        
+        set_cell(sheet.cell(start_row, start_col + 3), val, False, True)
+        merge_cells(sheet, start_row, start_col + 3, start_row, start_col + 4)
+        start_row += 1
+    if start_row > max_row:
+        max_row = start_row
+    thicken(sheet, save_row, start_col, save_row, start_col + 4);
+    thicken(sheet, save_row, start_col, start_row - 1, start_col + 4);
+    thicken(sheet, save_row + 1, start_col, start_row - 1, start_col + 2);
+
+    return max_row
 
 
 # ------------------------------------------------
@@ -502,8 +590,10 @@ def set_cell(c, v, bld=False, ralign=False):
     else:
         c.font = c.font.copy(size=12)
 
-    if (ralign):
+    if (ralign == True):
         c.alignment = c.alignment.copy(horizontal = "right")
+    elif ralign == "center":
+        c.alignment = c.alignment.copy(horizontal = "center")
 
     c.value = v
 
@@ -533,7 +623,13 @@ def thicken(sheet, ul_row, ul_col, lr_row, lr_col):
     for i in range(ul_row, lr_row + 1):
         c = sheet.cell(i, lr_col)
         c.border = c.border.copy(right=Side(style='medium'))
-        
+
+def merge_cells(sheet, ul_row, ul_col, lr_row, lr_col):
+    left_letter = sheet.cell(ul_row, ul_col).column_letter
+    right_letter = sheet.cell(ul_row, lr_col).column_letter
+    fmt = "%s%d:%s%d" % (left_letter, ul_row, right_letter, lr_row)
+    sheet.merge_cells(fmt)
+
 
 # ------------------------------------------------
 # Print table header to spreadsheet
@@ -542,12 +638,12 @@ def excel_table_header(hists, book):
     slice_col = 1
     thresh_start_col = slice_col + 1
     thresh = []
-    hists[0].cur_row = hists[0].first_row
+    hists[0].cur_row = hists[0].first_table_row
     hist_len = Args.num_buckets + Args.extra + 1 # pad one column
     sheet = book.active
 
     for i in Hist.display_range:
-        thresh.append(str(pow(2, i)))
+        thresh.append("%d %s" % (pow(2, i), Hist.scale_label[4:6]))
 
     fc = hists[0].first_col
 
@@ -556,10 +652,7 @@ def excel_table_header(hists, book):
         set_cell(sheet.cell(hists[0].cur_row, tmp_col), hists[i].name, True)
         set_cell(sheet.cell(hists[0].cur_row+1, tmp_col), Hist.scale_label, True)
         t2 = tmp_col + len(Hist.display_range) + Args.extra - 1
-        letter1 = sheet.cell(hists[0].cur_row+1, tmp_col).column_letter
-        letter2 = sheet.cell(hists[0].cur_row+1, t2).column_letter
-        fmt = "{1}{0}:{2}{0}".format(hists[0].cur_row+1, letter1, letter2)
-        sheet.merge_cells(fmt)
+        merge_cells(sheet, hists[0].cur_row+1, tmp_col, hists[0].cur_row+1, t2)
         c = sheet.cell(hists[0].cur_row+1, tmp_col)
         c.alignment = c.alignment.copy(horizontal = "center")
         thicken(sheet, hists[0].cur_row+1, tmp_col, hists[0].cur_row+1, t2)
@@ -635,21 +728,22 @@ def excel_latency_aggregates(hists, num_slices, book):
     
     # print averages
     set_cell(sheet.cell(hists[0].cur_row, cur_col), "Avg", True)
-    hists[0].last_row = hists[0].cur_row - 1
+    hists[0].last_table_row = hists[0].cur_row - 1
 
     for hist in hists:
         for i in Hist.display_range:
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].first_row, hists[0].last_row)
-            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
+                                         hists[0].first_table_row, hists[0].last_table_row)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00%", True)
 
         if (Args.extra):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=AVERAGE({0}{1}:{0}{2})".format(col_letter,
-                                                   hists[0].first_row, hists[0].last_row)
+                                                   hists[0].first_table_row,
+                                                   hists[0].last_table_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
 
         cur_col += 1
@@ -665,14 +759,14 @@ def excel_latency_aggregates(hists, num_slices, book):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].first_row, hists[0].last_row)
-            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00", True)
+                                         hists[0].first_table_row, hists[0].last_table_row)
+            set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.00%", True)
 
         if (Args.extra):
             cur_col += 1
             col_letter = sheet.cell(hists[0].cur_row, cur_col).column_letter
             fmt = "=MAX({0}{1}:{0}{2})".format(col_letter,
-                                         hists[0].first_row, hists[0].last_row)
+                                         hists[0].first_table_row, hists[0].last_table_row)
             set_num(sheet.cell(hists[0].cur_row, cur_col), fmt, "0.0", True)
 
         cur_col += 1
@@ -737,7 +831,7 @@ def excel_slice_line(slice_tag, hists, book):
     for hist in hists:
         for i in Hist.display_range:
             cur_col += 1
-            set_num(sheet.cell(hists[0].cur_row, cur_col), hist.overs[i], "0.00")
+            set_num(sheet.cell(hists[0].cur_row, cur_col), hist.overs[i] / 100.0, "0.00%")
 
         if (Args.extra):
             cur_col += 1
