@@ -33,6 +33,7 @@ try:
         LineChart,
         Reference,
     )
+    from copy import deepcopy
     have_openpyxl = True
 except:
     have_openpyxl = False
@@ -82,7 +83,6 @@ class Hist(object):
     cur_row = None
     last_table_row = None
 
-
     def __init__(self, name):
         self.name = name
 
@@ -97,6 +97,7 @@ class Hist(object):
         self.overs = [0.0] * Hist.max_bucket
         self.avg_overs = [0.0] * Hist.max_bucket
         self.max_overs = [0.0] * Hist.max_bucket
+        self.start_col = None
 
 
 # ==========================================================
@@ -152,7 +153,7 @@ def main():
             fc = lc + 1
 
         if (Args.graph):
-            excel_graph(wb, 1, 1)
+            excel_graph(wb, hists, 1, 1)
         
         wb.save(Args.excel)
     else:
@@ -546,17 +547,23 @@ def excel_config(config, book, start_row, start_col):
 # ------------------------------------------------
 # Output configuration information to Excel Spreadsheet
 #
-def excel_graph(book, start_row, start_col):
-    chart = LineChart()
-    chart.title = "request wait buckets versus time"
-    chart.style = 13
-    chart.x_axis.title = "Time Slice"
-    chart.y_axis.title = "%% exceeding 'x' %s to complete" % (Hist.scale_label[4:6])
+def excel_graph(book, hists, start_row, start_col):
+    sheet = book.active
+    charts = dict()
 
+    nc = len(Hist.display_range)
+    for hist in hists:
+        chart = LineChart()
+        chart.title = "Request distribution for '%s'" % (hist.name)
+        chart.style = 2
+        chart.x_axis.title = "Time Slice"
+        chart.y_axis.title = "%% exceeding 'x' %s to complete" % (Hist.scale_label[4:6])
+        data = Reference(sheet, hist.start_col, Hist.first_table_row + 2,
+                         hist.start_col + nc - 1, Hist.last_table_row)
+        chart.add_data(data, titles_from_data=True)
+        sheet.add_chart(chart, sheet.cell(Hist.last_table_row + 5, hist.start_col).coordinate)
+        charts[hist.name] = chart
     
-    return None
-
-
 # ------------------------------------------------
 # Find index + 1 of last bucket to display.
 #
@@ -763,6 +770,7 @@ def excel_latency_aggregates(hists, num_slices, book):
     Hist.last_table_row = Hist.cur_row - 1
 
     for hist in hists:
+        hist.start_col = cur_col + 1
         for i in Hist.display_range:
             cur_col += 1
             col_letter = sheet.cell(Hist.cur_row, cur_col).column_letter
