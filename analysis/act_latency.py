@@ -483,10 +483,20 @@ def excel_table_header(hists, book):
 
     fc = hists[0].first_col
 
-    for i in range(0, len(hists)):        
-        set_cell(sheet.cell(hists[0].cur_row, fc + 1 + hist_len * i), hists[i].name, True)
-        set_cell(sheet.cell(hists[0].cur_row+1, fc + 1 + hist_len * i), Hist.scale_label, True)
-
+    for i in range(0, len(hists)):
+        tmp_col = fc + 1 + hist_len * i
+        set_cell(sheet.cell(hists[0].cur_row, tmp_col), hists[i].name, True)
+        set_cell(sheet.cell(hists[0].cur_row+1, tmp_col), Hist.scale_label, True)
+        t2 = tmp_col + len(Hist.display_range) + Args.extra - 1
+        letter1 = sheet.cell(hists[0].cur_row+1, tmp_col).column_letter
+        letter2 = sheet.cell(hists[0].cur_row+1, t2).column_letter
+        fmt = "{1}{0}:{2}{0}".format(hists[0].cur_row+1, letter1, letter2)
+        sheet.merge_cells(fmt)
+        c = sheet.cell(hists[0].cur_row+1, tmp_col)
+        c.alignment = c.alignment.copy(horizontal = "center")
+        thicken(sheet, hists[0].cur_row+1, tmp_col, hists[0].cur_row+1, t2)
+        
+        
     hists[0].cur_row += 2
 
     fc = hists[0].first_col
