@@ -477,6 +477,14 @@ def excel_config(config, book, start_row, start_col):
     thicken(sheet, start_row, start_col + 11, start_row, start_col + 12)
     merge_cells(sheet, start_row, start_col + 11, start_row, start_col + 12)
     
+    set_cell(sheet.cell(start_row, start_col + 15), "Command Line", True)
+    thicken(sheet, start_row, start_col + 15, start_row, start_col + 16)
+    merge_cells(sheet, start_row, start_col + 15, start_row, start_col + 16)
+
+    set_cell(sheet.cell(start_row, start_col + 17), " ".join(sys.argv[1:]))
+    thicken(sheet, start_row, start_col + 17, start_row, start_col + 21)
+    merge_cells(sheet, start_row, start_col + 17, start_row, start_col + 21)
+
     start_row += 2
 
     save_row = start_row
