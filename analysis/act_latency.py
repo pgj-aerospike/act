@@ -99,7 +99,9 @@ class Hist(object):
 
 def main():
     get_args()
-    file_id = open_log_file()
+    config = open_log_file()
+    file_id = config['misc']['file_id']
+    
     find_max_bucket()
     hists = [Hist(name) for name in Args.histograms]
 
@@ -107,15 +109,18 @@ def main():
         if not Args.excel.endswith('.xlsx'):
             Args.excel += '.xlsx'
         try:
-            wb = Workbook() #(write_only = True)
+            wb = Workbook()
             wb.save(Args.excel)
         except:
             print("can't save " + Args.excel + ": check permissions")
             print_usage()
             sys.exit(-1)
+        # excel_config(config)
+        dump_config(config)
         excel_table_header(hists, wb)
     else:
         wb = None
+        print_config(config)
         print_table_header(hists)
 
     num_slices = output_latency_slices(hists, file_id, wb)
@@ -237,15 +242,29 @@ def print_usage():
 
 
 # ------------------------------------------------
-# Open log file and validate header information.
+# Open log file, validate header information, and collect it for later processing.
 #
 def open_log_file():
+    config = dict()
+    misc = dict()
+    act = []
+    derived = []
+    histogram_names = []
+
+    config['misc'] = misc
+    config['act'] = act
+    config['derived'] = derived
+    config['histogram_names'] = histogram_names
+
     # Open the log file:
     try:
         file_id = open(Args.log, "r")
     except IOError:
         print("log file " + Args.log + " not found")
         sys.exit(-1)
+
+    misc['log_file'] = Args.log
+    misc['file_id'] = file_id
 
     # Find and echo the version:
     line = file_id.readline()
@@ -258,7 +277,7 @@ def open_log_file():
         sys.exit(-1)
 
     version = line.split(" ")[2].strip()
-    print(Args.log + " is ACT version " + version + "\n")
+    misc['version'] = version
     numeric_version = float(version)
 
     if numeric_version < 5.0 or numeric_version >= 6.0:
@@ -297,9 +316,8 @@ def open_log_file():
 
     # Adjust the slice time if necessary:
     Hist.slice_time = ((Args.slice + interval - 1) // interval) * interval
+    misc['slice_time'] = Hist.slice_time
 
-    if Hist.slice_time != Args.slice:
-        print("analyzing time slices of " + str(Hist.slice_time) + " seconds")
 
     # Echo the config from the log file:
     file_id.seek(0, 0)
@@ -313,9 +331,11 @@ def open_log_file():
         sys.exit(-1)
 
     if line.startswith("ACT-STORAGE"):
+        misc['act_type'] = "ACT-STORAGE"
         if not Args.histograms:
             Args.histograms = ["reads", "device-reads"]
     elif line.startswith("ACT-INDEX"):
+        misc['act_type'] = "ACT-INDEX"
         if not Args.histograms:
             Args.histograms = ["trans-reads", "device-reads"]
     else:
@@ -324,11 +344,13 @@ def open_log_file():
 
     line = line.strip()
 
+    lineno = 0
     while line:
-        print(line)
+        v = line.split(':')
+        if (len(v) == 2):
+            act.append([v[0], v[1].strip(), lineno])
+            lineno += 1
         line = file_id.readline().strip()
-
-    print("")
 
     line = file_id.readline()
 
@@ -341,11 +363,13 @@ def open_log_file():
 
     line = line.strip()
 
+    lineno = 0
     while line:
-        print(line)
+        v = line.split(':')
+        if (len(v) == 2):
+            derived.append([v[0], v[1].strip(), lineno])
+            lineno += 1
         line = file_id.readline().strip()
-
-    print("")
 
     # Echo the histogram names from the log file:
     file_id.seek(0, 0)
@@ -360,13 +384,57 @@ def open_log_file():
 
     line = line.strip()
 
+    lineno = 0
     while line:
-        print(line)
+        if lineno > 0:
+            histogram_names.append([line, lineno])
+        lineno += 1
         line = file_id.readline().strip()
 
-    print("")
+    return config
 
-    return file_id
+
+def dump_config(config):
+    for i in config:
+        print ("============ dumping " + i)
+        tmp = config[i]
+        if i == "misc":
+            for x in tmp:
+                print("   %s: %s" % (x, str(tmp[x])))
+        else:
+            for x in tmp:
+                if len(x) == 3:
+                    print("   %3.3d %s: %s" % (x[-1], x[0], x[1]))
+                else:
+                    print("   %3.3d %s" % (x[-1], x[0]))
+
+
+# ------------------------------------------------
+# Print configuration information
+#
+def print_config(config):
+    misc = config['misc']
+    print("%s is ACT version %s\n" % (misc['log_file'], misc['version']))
+    if Hist.slice_time != Args.slice:
+        print("analyzing time slices of " + str(Hist.slice_time) + " seconds")
+
+    print("%s CONFIGURATION" % (misc['act_type']))
+    for x in config['act']:
+        print("%s: %s" % (x[0], x[1]))
+    print("\nDERIVED CONFIGURATION")
+    for x in config['derived']:
+        print("%s: %s" % (x[0], x[1]))
+    print("\nHISTOGRAM NAMES")
+    for x in config['histogram_names']:
+        print(x[0])
+    print("")
+    
+
+# ------------------------------------------------
+# Output configuration information to Excel Spreadsheet
+#
+def excep_config(config):
+    return None
 
 
 # ------------------------------------------------
